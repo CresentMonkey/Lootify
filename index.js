@@ -12,6 +12,7 @@ const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
 const VIP_ROLE_ID = process.env.VIP_ROLE_ID;
 const VERIFIED_ROLE_ID = process.env.VERIFIED_ROLE; // Verified Role ID
+const PORT = process.env.PORT || 3000;
 
 // File to store VIP player data
 const VIP_DATA_FILE = "vipPlayers.json";
@@ -36,6 +37,49 @@ const writeVIPData = (data) => {
     }
 };
 
+// Root route for testing if the server is running
+app.get("/", (req, res) => {
+    res.send("Welcome to the Lootify API! The server is up and running.");
+});
+
+// Middleware to validate API key
+app.use((req, res, next) => {
+    const apiKey = req.headers.authorization;
+    if (apiKey !== process.env.API_KEY) {
+        console.warn("Unauthorized request detected!");
+        return res.status(403).send("Forbidden: Invalid API Key");
+    }
+    next();
+});
+
+// Route to handle VIP updates from Roblox
+app.post("/update-vip", (req, res) => {
+    const { userId, username, gamePass } = req.body;
+
+    if (!userId || !username || !gamePass) {
+        return res.status(400).send("Missing required data: userId, username, or gamePass");
+    }
+
+    // Read current VIP data
+    let vipPlayers = readVIPData();
+
+    // Check if the player already exists (avoid duplicates)
+    const existingPlayerIndex = vipPlayers.findIndex(
+        (player) => player.userId === userId && player.gamePass === gamePass
+    );
+
+    if (existingPlayerIndex === -1) {
+        // Add a new player
+        vipPlayers.push({ userId, username, gamePass });
+        writeVIPData(vipPlayers);
+        console.log(`Added: ${username} with game pass: ${gamePass}`);
+    } else {
+        console.log(`Player ${username} with game pass ${gamePass} already exists.`);
+    }
+
+    res.status(200).send("VIP data updated successfully.");
+});
+
 // Discord Bot Setup
 const bot = new Client({
     intents: [
@@ -44,7 +88,7 @@ const bot = new Client({
     ],
 });
 
-// Register Slash Commands
+// Register Discord Slash Commands
 const rest = new REST({ version: "10" }).setToken(DISCORD_BOT_TOKEN);
 
 bot.once("ready", async () => {
@@ -70,34 +114,6 @@ bot.once("ready", async () => {
 
 // Login Discord bot
 bot.login(DISCORD_BOT_TOKEN);
-
-// Handle HTTP POST requests from Roblox
-app.post("/update-vip", (req, res) => {
-    const { userId, username, gamePass } = req.body;
-
-    if (!userId || !username || !gamePass) {
-        return res.status(400).send("Missing data: userId, username, or gamePass");
-    }
-
-    // Read current VIP data
-    let vipPlayers = readVIPData();
-
-    // Check if the player already exists (avoid duplicates)
-    const existingPlayerIndex = vipPlayers.findIndex(
-        (player) => player.userId === userId && player.gamePass === gamePass
-    );
-
-    if (existingPlayerIndex === -1) {
-        // Add a new player
-        vipPlayers.push({ userId, username, gamePass });
-        writeVIPData(vipPlayers);
-        console.log(`Added: ${username} with game pass: ${gamePass}`);
-    } else {
-        console.log(`Player ${username} with game pass ${gamePass} already exists.`);
-    }
-
-    res.status(200).send("VIP data updated successfully.");
-});
 
 // Handle Discord Slash Command `/get-role`
 bot.on("interactionCreate", async (interaction) => {
@@ -143,7 +159,7 @@ bot.on("interactionCreate", async (interaction) => {
 
         // Step 3: Assign the VIP role
         await updatedMember.roles.add(VIP_ROLE_ID);
-        interaction.reply({ content: "VIP role successfully assigned!", ephemeral: true });
+        return interaction.reply({ content: "VIP role successfully assigned!", ephemeral: true });
     } catch (err) {
         console.error("Error processing the command:", err);
         interaction.reply({
@@ -154,7 +170,6 @@ bot.on("interactionCreate", async (interaction) => {
 });
 
 // Start the Express Server
-const PORT = 3000; // Change if needed
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
