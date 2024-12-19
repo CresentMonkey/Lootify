@@ -13,6 +13,7 @@ const GUILD_ID = process.env.GUILD_ID;
 const VIP_ROLE_ID = process.env.VIP_ROLE_ID;
 const VERIFIED_ROLE_ID = process.env.VERIFIED_ROLE; // Verified Role ID
 const PORT = process.env.PORT || 3000;
+const API_KEY = process.env.API_KEY;
 
 // File to store VIP player data
 const VIP_DATA_FILE = "vipPlayers.json";
@@ -38,8 +39,14 @@ const writeVIPData = (data) => {
 };
 
 // Root route for testing if the server is running
-app.get("/", (req, res) => {
-    res.send("Welcome to the Lootify API! The server is up and running.");
+app.get("/vip-players", (req, res) => {
+    try {
+        const vipPlayers = readVIPData(); // Use your existing readVIPData function
+        res.status(200).json({ success: true, data: vipPlayers });
+    } catch (err) {
+        console.error("Error fetching VIP players data:", err);
+        res.status(500).json({ success: false, message: "Error reading VIP players data" });
+    }
 });
 
 // Middleware to validate API key
