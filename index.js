@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
 const fs = require("fs");
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits, REST, Routes } = require("discord.js");
 
 const app = express();
 app.use(bodyParser.json());
@@ -43,7 +43,30 @@ const bot = new Client({
     ],
 });
 
+// Login Discord bot
 bot.login(DISCORD_BOT_TOKEN);
+
+// Register Slash Commands
+const rest = new REST({ version: "10" }).setToken(DISCORD_BOT_TOKEN);
+
+(async () => {
+    try {
+        console.log("Registering slash commands...");
+
+        await rest.put(Routes.applicationGuildCommands(bot.user.id, GUILD_ID), {
+            body: [
+                {
+                    name: "get-role",
+                    description: "Assign the VIP role to your account if eligible",
+                },
+            ],
+        });
+
+        console.log("Slash commands registered successfully!");
+    } catch (err) {
+        console.error("Error registering slash commands:", err);
+    }
+})();
 
 // Handle HTTP POST requests from Roblox
 app.post("/update-vip", (req, res) => {
@@ -56,16 +79,18 @@ app.post("/update-vip", (req, res) => {
     // Read current VIP data
     let vipPlayers = readVIPData();
 
-    // Check if the player already exists
-    const existingPlayer = vipPlayers.find(player => player.userId === userId && player.gamePass === gamePass);
+    // Check if the player already exists (avoid duplicates)
+    const existingPlayerIndex = vipPlayers.findIndex(
+        (player) => player.userId === userId && player.gamePass === gamePass
+    );
 
-    if (!existingPlayer) {
+    if (existingPlayerIndex === -1) {
         // Add a new player
         vipPlayers.push({ userId, username, gamePass });
         writeVIPData(vipPlayers);
         console.log(`Added: ${username} with game pass: ${gamePass}`);
     } else {
-        console.log(`Player ${username} already exists with game pass: ${gamePass}`);
+        console.log(`Player ${username} with game pass ${gamePass} already exists.`);
     }
 
     res.status(200).send("VIP data updated successfully.");
@@ -90,7 +115,7 @@ bot.on("interactionCreate", async (interaction) => {
 
     // Read VIP data
     const vipPlayers = readVIPData();
-    const vipPlayer = vipPlayers.find(player => player.username === robloxUsername);
+    const vipPlayer = vipPlayers.find((player) => player.username === robloxUsername);
 
     if (!vipPlayer) {
         return interaction.reply({
@@ -99,8 +124,13 @@ bot.on("interactionCreate", async (interaction) => {
         });
     }
 
-    await member.roles.add(VIP_ROLE_ID);
-    interaction.reply({ content: "VIP role successfully assigned!", ephemeral: true });
+    try {
+        await member.roles.add(VIP_ROLE_ID);
+        interaction.reply({ content: "VIP role successfully assigned!", ephemeral: true });
+    } catch (err) {
+        console.error("Error assigning role:", err);
+        interaction.reply({ content: "Failed to assign the VIP role. Please try again later.", ephemeral: true });
+    }
 });
 
 // Start the Express Server
