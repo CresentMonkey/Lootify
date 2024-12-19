@@ -57,7 +57,7 @@ app.post("/update-vip", (req, res) => {
     const { userId, username, gamePass } = req.body;
 
     if (!userId || !username || !gamePass) {
-        return res.status(400).send("Missing required data: userId, username, or gamePass");
+        return res.status(400).json({ success: false, message: "Missing required data: userId, username, or gamePass" });
     }
 
     // Read current VIP data
@@ -73,11 +73,11 @@ app.post("/update-vip", (req, res) => {
         vipPlayers.push({ userId, username, gamePass });
         writeVIPData(vipPlayers);
         console.log(`Added: ${username} with game pass: ${gamePass}`);
+        return res.status(200).json({ success: true, message: `Added: ${username} with game pass: ${gamePass}` });
     } else {
         console.log(`Player ${username} with game pass ${gamePass} already exists.`);
+        return res.status(200).json({ success: true, message: `Player ${username} with game pass ${gamePass} already exists.` });
     }
-
-    res.status(200).send("VIP data updated successfully.");
 });
 
 // Discord Bot Setup
