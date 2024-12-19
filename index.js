@@ -11,6 +11,7 @@ app.use(bodyParser.json());
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
 const VIP_ROLE_ID = process.env.VIP_ROLE_ID;
+const VERIFIED_ROLE_ID = process.env.VERIFIED_ROLE; // Verified Role ID
 
 // File to store VIP player data
 const VIP_DATA_FILE = "vipPlayers.json";
@@ -43,13 +44,12 @@ const bot = new Client({
     ],
 });
 
-// Login Discord bot
-bot.login(DISCORD_BOT_TOKEN);
-
 // Register Slash Commands
 const rest = new REST({ version: "10" }).setToken(DISCORD_BOT_TOKEN);
 
-(async () => {
+bot.once("ready", async () => {
+    console.log(`${bot.user.tag} is online and ready!`);
+
     try {
         console.log("Registering slash commands...");
 
@@ -66,7 +66,10 @@ const rest = new REST({ version: "10" }).setToken(DISCORD_BOT_TOKEN);
     } catch (err) {
         console.error("Error registering slash commands:", err);
     }
-})();
+});
+
+// Login Discord bot
+bot.login(DISCORD_BOT_TOKEN);
 
 // Handle HTTP POST requests from Roblox
 app.post("/update-vip", (req, res) => {
@@ -100,36 +103,53 @@ app.post("/update-vip", (req, res) => {
 bot.on("interactionCreate", async (interaction) => {
     if (!interaction.isCommand() || interaction.commandName !== "get-role") return;
 
-    const member = interaction.member;
-    const displayName = member.displayName;
-    const robloxUsernameMatch = displayName.match(/\(@(.+?)\)$/);
-
-    if (!robloxUsernameMatch) {
-        return interaction.reply({
-            content: "Your Discord account is not linked to a Roblox username via Bloxlink. Please link your account and try again.",
-            ephemeral: true,
-        });
-    }
-
-    const robloxUsername = robloxUsernameMatch[1];
-
-    // Read VIP data
-    const vipPlayers = readVIPData();
-    const vipPlayer = vipPlayers.find((player) => player.username === robloxUsername);
-
-    if (!vipPlayer) {
-        return interaction.reply({
-            content: "You do not have VIP status in the game.",
-            ephemeral: true,
-        });
-    }
-
     try {
-        await member.roles.add(VIP_ROLE_ID);
+        const member = interaction.member;
+
+        // Fetch the latest member data to ensure role data is up-to-date
+        const updatedMember = await interaction.guild.members.fetch(member.id);
+
+        // Step 1: Check if the member has the verified role
+        if (!updatedMember.roles.cache.has(VERIFIED_ROLE_ID)) {
+            return interaction.reply({
+                content: "You must be verified with Bloxlink first!",
+                ephemeral: true,
+            });
+        }
+
+        // Step 2: Check if the member is in the VIP players JSON
+        const displayName = member.displayName;
+        const robloxUsernameMatch = displayName.match(/\(@(.+?)\)$/);
+
+        if (!robloxUsernameMatch) {
+            return interaction.reply({
+                content: "Your Discord account is not linked to a Roblox username via Bloxlink. Please link your account and try again.",
+                ephemeral: true,
+            });
+        }
+
+        const robloxUsername = robloxUsernameMatch[1];
+
+        // Read VIP data
+        const vipPlayers = readVIPData();
+        const vipPlayer = vipPlayers.find((player) => player.username === robloxUsername);
+
+        if (!vipPlayer) {
+            return interaction.reply({
+                content: "You do not have VIP status in the game.",
+                ephemeral: true,
+            });
+        }
+
+        // Step 3: Assign the VIP role
+        await updatedMember.roles.add(VIP_ROLE_ID);
         interaction.reply({ content: "VIP role successfully assigned!", ephemeral: true });
     } catch (err) {
-        console.error("Error assigning role:", err);
-        interaction.reply({ content: "Failed to assign the VIP role. Please try again later.", ephemeral: true });
+        console.error("Error processing the command:", err);
+        interaction.reply({
+            content: "An error occurred while processing your request. Please try again later.",
+            ephemeral: true,
+        });
     }
 });
 
