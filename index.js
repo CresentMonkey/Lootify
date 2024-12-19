@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
 const fs = require("fs");
-const { Client, Intents } = require("discord.js");
+const { Client, GatewayIntentBits } = require("discord.js");
 
 const app = express();
 app.use(bodyParser.json());
@@ -36,7 +36,13 @@ const writeVIPData = (data) => {
 };
 
 // Discord Bot Setup
-const bot = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MEMBERS] });
+const bot = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers, // Required for assigning roles
+    ],
+});
+
 bot.login(DISCORD_BOT_TOKEN);
 
 // Handle HTTP POST requests from Roblox
